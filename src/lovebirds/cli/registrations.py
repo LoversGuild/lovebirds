@@ -317,14 +317,14 @@ def _register_participation(config: Config, raw: RawRegistration) -> None:
         amended_reg.amends = reg.time
         participation.registrations.append(amended_reg)
 
-    pre_signed_status = [
+    pre_registered_status = [
         None,
         ParticipationStatus.invited,
         ParticipationStatus.declined,
     ]
     current_phase = participation.phases[-1] if len(participation.phases) != 0 else None
     current_status = current_phase.status if current_phase is not None else None
-    if current_status in pre_signed_status:
+    if current_status in pre_registered_status:
         if current_phase is None:
             role = ParticipationRole(
                 edit.input_validated(
@@ -335,45 +335,47 @@ def _register_participation(config: Config, raw: RawRegistration) -> None:
             )
         else:
             role = current_phase.role
-        logging.info(f"Marking `{person.named_email}' as `signed'...")
+        logging.info(f"Marking `{person.named_email}' as `registered'...")
         comment = edit.input("Enter comment for sign-in: ").strip()
         participation.phases.append(
             ParticipationPhase(
                 time=local_now(),
                 role=role,
-                status=ParticipationStatus.signed,
+                status=ParticipationStatus.registered,
                 source=InformationSource.organizer,
                 operator=EmailAddress(config.args.operator),
             )
         )
     else:
-        signed_phase = next(
+        registered_phase = next(
             (
                 phase
                 for phase in reversed(participation.phases)
-                if phase.status == ParticipationStatus.signed
+                if phase.status == ParticipationStatus.registered
             ),
             None,
         )
-        if signed_phase is not None:
-            logging.info(f"Updating signed phase for `{person.named_email}'...")
-            signed_phase.comment = edit.input(
-                "Edit comment for sign-in: ", init=signed_phase.comment
+        if registered_phase is not None:
+            logging.info(f"Updating registered phase for `{person.named_email}'...")
+            registered_phase.comment = edit.input(
+                "Edit comment for sign-in: ", init=registered_phase.comment
             ).strip()
             prev_time_str = (
-                signed_phase.time.isoformat() if signed_phase.time is not None else None
+                registered_phase.time.isoformat()
+                if registered_phase.time is not None
+                else None
             )
             time_str = edit.input_validated(
                 prompt="Edit sign-in time (leave empty for current time): ",
                 predicate=lambda val: val == "" or is_valid_iso_datetime(val),
                 init=prev_time_str,
             ).strip()
-            signed_phase.time = (
+            registered_phase.time = (
                 datetime.fromisoformat(time_str) if time_str != "" else local_now()
             )
         else:
             logging.info(
-                f"Not marking `{person.named_email}' as `signed' due to current post-signed status: `{current_status}'"
+                f"Not marking `{person.named_email}' as `registered' due to current post-registered status: `{current_status}'"
             )
 
 

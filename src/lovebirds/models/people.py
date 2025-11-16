@@ -119,7 +119,7 @@ class ParticipationPhase:
 
 class ParticipationStatus(Enum):
     invited = "invited"
-    signed = "signed"
+    registered = "registered"
     accepted = "accepted"
     participated = "participated"
     absent = "absent"
