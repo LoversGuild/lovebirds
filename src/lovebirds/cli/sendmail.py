@@ -199,7 +199,7 @@ class _SmtpProxy:
                 raise RuntimeError(
                     f"Cannot send a single message—messages_per_connection is {limit}"
                 )
-            if self.message_count > limit:
+            if self.message_count >= limit:
                 logging.debug("Messages per connection limit reached, reconnecting...")
                 self.reconnect()
 
