@@ -7,6 +7,7 @@ import argparse
 from dataclasses import dataclass
 import logging
 import traceback
+from typing import Any
 
 from typeguard import TypeCheckError, check_type
 
@@ -21,6 +22,7 @@ class Config:
     event: Event | None
     event_id: EventId
     people: People
+    participants_info: dict[str, Any] | None = None
 
     def save_people(self, backup: bool = True) -> None:
         try:

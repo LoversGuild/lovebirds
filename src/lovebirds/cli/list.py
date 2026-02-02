@@ -26,6 +26,7 @@ def list_people(config: Config) -> None:
     rows = []
     for p in config.people.values():
         globals = person_to_dict(p, event_id)
+        globals["participants_info"] = config.participants_info
 
         # Find preferences
         if (
