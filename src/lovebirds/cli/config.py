@@ -14,6 +14,7 @@ from typeguard import TypeCheckError, check_type
 from lovebirds.models.events import Event, EventId
 from lovebirds.io import backup_file, save_people
 from lovebirds.models.people import People
+from lovebirds.statistics import EventParticipantsStatistics
 
 
 @dataclass(kw_only=True)
@@ -22,7 +23,7 @@ class Config:
     event: Event | None
     event_id: EventId
     people: People
-    participants_info: dict[str, Any] | None = None
+    event_participants_stats: EventParticipantsStatistics | None = None
 
     def save_people(self, backup: bool = True) -> None:
         try:

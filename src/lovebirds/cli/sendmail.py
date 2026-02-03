@@ -286,7 +286,7 @@ def _make_message(
         "event_id": config.event.event_id,
         "language": language,
         "recipient": person_to_dict(recipient, config.event.event_id),
-        "participants_info": config.participants_info,
+        "stats": config.event_participants_stats,
     }
 
     vars, complete = eval_variables(unevaluated_variables, globals=globals)

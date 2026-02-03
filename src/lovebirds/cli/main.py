@@ -21,7 +21,7 @@ from lovebirds.models.people import (
     ParticipationRole,
     ParticipationStatus,
 )
-from lovebirds.templates.participants import participants_info_as_dict
+from lovebirds.statistics import get_event_participants_statistics
 
 __all__ = ["main"]
 
@@ -314,14 +314,16 @@ def parse_arguments() -> Config:
         event_id = None
         event = None
 
-    participants_info = (
-        participants_info_as_dict(event_id, people) if event_id is not None else None
+    event_participants_stats = (
+        get_event_participants_statistics(event_id, people)
+        if event_id is not None
+        else None
     )
     config = Config(
         args=args,
         event=event,
         event_id=event_id,
-        participants_info=participants_info,
+        event_participants_stats=event_participants_stats,
         people=people,
     )
     return config

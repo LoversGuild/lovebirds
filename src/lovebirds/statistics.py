@@ -1,22 +1,33 @@
 # ©2025 The Lovers’ Guild
 # This file is licensed under the GNU General Public License version 3.0.
 
-"""Participant statistics to template conversion."""
+"""Participantion statistics calculation."""
 
+from dataclasses import dataclass
 import datetime
 from statistics import mean
 from typing import Any
 
 
-from lovebirds.cli.config import Config
 from lovebirds.models.events import EventId
 from lovebirds.models.people import ParticipationStatus, People, Person
 from lovebirds.utils import calculate_age
 
-__all__ = ["participants_info_as_dict"]
+__all__ = ["EventParticipantsStatistics", "get_event_participants_statistics"]
 
 
-def participants_info_as_dict(event_id: EventId, people: People) -> dict[str, Any]:
+@dataclass
+class EventParticipantsStatistics:
+    count: int
+    min_age: int
+    max_age: int
+    age_range: str
+    age_average: int
+
+
+def get_event_participants_statistics(
+    event_id: EventId, people: People
+) -> EventParticipantsStatistics | None:
     def participates(p: Person) -> bool:
         nonlocal event_id
         if (
@@ -46,7 +57,7 @@ def participants_info_as_dict(event_id: EventId, people: People) -> dict[str, An
     participants = [p for p in people.values() if participates(p)]
     count = len(participants)
     if count == 0:
-        return {}
+        return None
 
     ages: list[int] = []
     for p in participants:
@@ -57,10 +68,10 @@ def participants_info_as_dict(event_id: EventId, people: People) -> dict[str, An
     min_age = min(ages)
     max_age = max(ages)
 
-    return {
-        "count": count,
-        "min_age": min_age,
-        "max_age": max_age,
-        "age_range": f"{min_age}–{max_age}",
-        "age_average": round(mean(ages)),
-    }
+    return EventParticipantsStatistics(
+        count=count,
+        min_age=min_age,
+        max_age=max_age,
+        age_range=f"{min_age}–{max_age}",
+        age_average=round(mean(ages)),
+    )
