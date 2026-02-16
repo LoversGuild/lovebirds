@@ -8,6 +8,7 @@ import copy
 from dataclasses import is_dataclass
 from datetime import datetime
 from enum import Enum
+from uuid import UUID
 import inspect
 from os import PathLike
 from typing import Any, cast

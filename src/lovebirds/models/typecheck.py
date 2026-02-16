@@ -26,6 +26,8 @@ def typecheck_dataclass(
 ) -> None:
     if not (is_dataclass(value) and is_dataclass(type(value))):
         raise TypeCheckError("is not an instance of a dataclass")
+    if not isinstance(value, origin_type):
+        raise TypeCheckError(f"is not an instance of {origin_type.__qualname__}")
 
     for name, hint in get_type_hints(origin_type).items():
         check_type(
