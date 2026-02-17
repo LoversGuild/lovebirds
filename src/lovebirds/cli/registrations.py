@@ -157,6 +157,7 @@ def _register_participation(config: Config, raw: RawRegistration) -> None:
             email=raw.email,
             languages=[],
         )
+        config.people[raw.email] = person
     elif person.locked:
         logging.warning(f"Registration for a locked person: `{person.named_email}'")
         logging.warning("The lock will stay in effect!")
