@@ -65,6 +65,9 @@ def get_event_participants_statistics(
         if age is not None:
             ages.append(age)
 
+    if len(ages) == 0:
+        return None
+
     min_age = min(ages)
     max_age = max(ages)
 
