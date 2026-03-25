@@ -7,10 +7,11 @@ Data types for people and participation.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
-from datetime import datetime
-from enum import Enum
 import copy
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
+from enum import Enum
+from uuid import UUID
 
 from lovebirds.models.email import EmailAddress
 from lovebirds.models.events import EventId
@@ -191,6 +192,28 @@ class Person:
             return " ".join(names)
 
     @property
+    def last_contact(self) -> datetime | None:
+        result: datetime | None = None
+        for event_id, part in self.participation.items():
+            if len(part.phases) == 0:
+                continue
+
+            # Find out event date (based on its name)
+            try:
+                event_date = datetime.fromisoformat(event_id).astimezone(timezone.utc)
+            except ValueError:
+                # Don't process this event at all, it is likely a pseudo-event
+                continue
+
+            phase = part.phases[-1]
+            if phase.status != ParticipationStatus.invited or result is None:
+                # The first ever invitation coutns as "person contacted"
+                time = phase.time or event_date
+                if result is None or time > result:
+                    result = time
+        return result
+
+    @property
     def named_email(self) -> str:
         name = self.full_name
         if name is None:
@@ -199,7 +222,7 @@ class Person:
             return f"{name} <{self.email}>"
 
 
-type PersonId = EmailAddress
+type PersonId = UUID
 
 
 type PersonRef = PersonRefById | PersonRefByName
