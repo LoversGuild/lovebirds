@@ -13,7 +13,7 @@ from typeguard import TypeCheckError, check_type
 
 from lovebirds.models.events import Event, EventId
 from lovebirds.io import backup_file, save_people
-from lovebirds.models.people import People
+from lovebirds.models.people import People, PersonId
 from lovebirds.statistics import EventParticipantsStatistics
 
 
@@ -24,6 +24,7 @@ class Config:
     event_id: EventId
     people: People
     event_participants_stats: EventParticipantsStatistics | None = None
+    operator_id: PersonId | None
 
     def save_people(self, backup: bool = True) -> None:
         try:

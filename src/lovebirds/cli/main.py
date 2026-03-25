@@ -20,6 +20,7 @@ from lovebirds.models.people import (
     InformationSource,
     ParticipationRole,
     ParticipationStatus,
+    find_person_id_by_email,
 )
 from lovebirds.statistics import get_event_participants_statistics
 
@@ -46,7 +47,7 @@ def parse_arguments() -> Config:
             type=str,
             dest="operator",
             required=True,
-            help="ID of the person to be marked as an operator",
+            help="Email address of the person to be marked as an operator",
         )
 
     def add_source_option(parser: argparse.ArgumentParser, required: bool) -> None:
@@ -300,8 +301,12 @@ def parse_arguments() -> Config:
 
     # Load people
     people = load_people(args.people_file)
-    if "operator" in args and args.operator not in people:
-        raise RuntimeError(f"Undefined operator id: {args.operator}")
+    if "operator" in args:
+        operator_id = find_person_id_by_email(people, args.operator)
+        if operator_id is None:
+            raise RuntimeError(f"Undefined operator id: {args.operator}")
+    else:
+        operator_id = None
 
     # Load event data, if needed
     if "event_id" in args:
@@ -324,6 +329,7 @@ def parse_arguments() -> Config:
         event=event,
         event_id=event_id,
         event_participants_stats=event_participants_stats,
+        operator_id=operator_id,
         people=people,
     )
     return config

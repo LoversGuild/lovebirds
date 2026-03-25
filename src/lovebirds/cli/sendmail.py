@@ -115,8 +115,9 @@ def send_messages(config: Config) -> None:
                 smtp.send_message(msg)
 
                 logging.debug("Updating recipient status...")
+                assert config.operator_id is not None
                 participation.sent_messages[config.args.msg_name] = SentMessageInfo(
-                    operator=EmailAddress(config.args.operator),
+                    operator=config.operator_id,
                     message_id=msg_id,
                     time=send_time,
                 )

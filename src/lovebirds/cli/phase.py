@@ -55,7 +55,7 @@ def add_phase(config: Config) -> None:
                     f"Changing last phase of `{person.named_email}': role {phase.role} -> {role}, status {phase.status} -> {status}, comment {phase.comment} -> {comment}, source {phase.source} -> {source}, operator {phase.operator} -> {operator}, time {show_datetime(phase.time)} -> {show_datetime(time)}"
                 )
 
-                # Note: assigning to previous object preserver some data—currently the comments attached to the phase
+                # Note: assigning to previous object preserves some data—currently the comments attached to the phase
                 phase.operator = operator
                 phase.source = source
                 phase.role = role
@@ -96,6 +96,8 @@ def add_phase(config: Config) -> None:
         else None
     )
 
+    assert config.operator_id is not None
+
     for p in config.people.values():
         if p.locked or p.consent.legacy:
             logging.debug(f"Skipping locked/legacy account `{p.named_email}'")
@@ -105,7 +107,7 @@ def add_phase(config: Config) -> None:
         result = eval_string("%" + config.args.expr, vars, "<command line>")
         if result is True:
             add(
-                operator=EmailAddress(config.args.operator),
+                operator=config.operator_id,
                 source=source,
                 person=p,
                 event_id=event_id,

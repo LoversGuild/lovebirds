@@ -10,6 +10,7 @@ import hashlib
 import logging
 import subprocess
 import sys
+import uuid
 import yaml
 
 
@@ -87,7 +88,9 @@ def _load_raw_registration(filename: FilePath) -> RawRegistration:
     return _raw_registration_decoder.decode(_decrypt_file(filename))
 
 
-def _find_person_by_email(people: People, raw: RawRegistration) -> Person | None:
+def _find_person_by_email_interactive(
+    people: People, raw: RawRegistration
+) -> Person | None:
     """Interactively find a person by email address. If matching person is not found, prompt to update a pre-existing person's email address, or return None to signal that a new person needs to be created."""
 
     # Create mapping from email addresses to ids
@@ -146,7 +149,7 @@ def _register_participation(config: Config, raw: RawRegistration) -> None:
 
     raw_hash = raw.compute_hash()
 
-    person = _find_person_by_email(config.people, raw)
+    person = _find_person_by_email_interactive(config.people, raw)
     if person is None:
         logging.info(
             f"Adding new person `{raw.first_name} {raw.last_name} <{raw.email}>'"
@@ -157,7 +160,8 @@ def _register_participation(config: Config, raw: RawRegistration) -> None:
             email=raw.email,
             languages=[],
         )
-        config.people[raw.email] = person
+        person_id = uuid.uuid4()
+        config.people[person_id] = person
     elif person.locked:
         logging.warning(f"Registration for a locked person: `{person.named_email}'")
         logging.warning("The lock will stay in effect!")
@@ -254,10 +258,11 @@ def _register_participation(config: Config, raw: RawRegistration) -> None:
     else:
         person_lists = person_strings
 
+    assert config.operator_id is not None
     reg = Registration(
         time=raw.timestamp,
         source=InformationSource.registration_form,
-        operator=EmailAddress(config.args.operator),
+        operator=config.operator_id,
         allergies=sanitize(raw.allergies),
         genitalia=raw.genitalia,
         preferences=Preferences(
@@ -344,7 +349,7 @@ def _register_participation(config: Config, raw: RawRegistration) -> None:
                 role=role,
                 status=ParticipationStatus.registered,
                 source=InformationSource.organizer,
-                operator=EmailAddress(config.args.operator),
+                operator=config.operator_id,
             )
         )
     else:
@@ -382,12 +387,12 @@ def _register_participation(config: Config, raw: RawRegistration) -> None:
 
 def _group_raw_registrations(
     registrations: list[RawRegistration],
-) -> dict[EventId, dict[PersonId, list[RawRegistration]]]:
+) -> dict[EventId, dict[EmailAddress, list[RawRegistration]]]:
     """Group a list of registrations into a dict of list of registrations
     keyed by event id and user email address.
     """
 
-    grouped_regs: dict[EventId, dict[PersonId, list[RawRegistration]]] = {}
+    grouped_regs: dict[EventId, dict[EmailAddress, list[RawRegistration]]] = {}
     for raw in sorted(registrations, key=lambda v: v.timestamp):
         grouped_regs.setdefault(raw.event_id, {}).setdefault(raw.email, []).append(raw)
     return grouped_regs

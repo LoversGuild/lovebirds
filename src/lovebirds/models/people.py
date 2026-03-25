@@ -38,6 +38,7 @@ __all__ = [
     "Registration",
     "SentMessageInfo",
     "StayingOvernight",
+    "find_person_id_by_email",
     "sorted_people",
 ]
 
@@ -300,6 +301,13 @@ class StayingOvernight(Enum):
     maybe = "maybe"
     probably_not = "probably_not"
     no = "no"
+
+
+def find_person_id_by_email(people: People, email: EmailAddress) -> PersonId | None:
+    for id, person in people.items():
+        if person.email == email:
+            return id
+    return None
 
 
 def sorted_people(people: People) -> People:
