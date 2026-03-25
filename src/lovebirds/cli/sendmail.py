@@ -312,8 +312,8 @@ def _make_message(
             f"No suitable translation available for {recipient.named_email}, sending in `{language}' anyway!"
         )
 
-    # Evaluate message headers
-    unevaluated_headers = config.event.mail.headers
+    # Evaluate message headers – headers defined per-message override those defined generically for the whole event
+    unevaluated_headers = config.event.mail.headers | message.headers
     headers, complete = eval_variables(unevaluated_headers, globals=vars_and_globals)
 
     if complete is not True:

@@ -62,6 +62,7 @@ class MessageInfo:
     condition: str
     translations: list[str]
     filename: str
+    headers: dict[str, str] = field(default_factory=dict)
     variables: dict[str, Any]
 
 
