@@ -11,6 +11,7 @@ from enum import Enum
 import inspect
 from os import PathLike
 from typing import Any, cast
+from uuid import UUID
 
 import jinja2
 
@@ -26,7 +27,7 @@ __all__ = [
 def to_dict_recursive(obj: Any) -> Any:
     """Convert an object recursively into a dict so that it is safe to use as a jinja2 template variable value."""
     match obj:
-        case None | bool() | datetime() | float() | int() | str():
+        case None | bool() | datetime() | float() | int() | str() | UUID():
             return obj
         case Enum():
             return obj.name
