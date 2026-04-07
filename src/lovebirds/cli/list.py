@@ -53,6 +53,7 @@ def list_people(config: Config) -> None:
             [key[0] + str(value) for key, value in sorted(stats.items())]
         )
         globals["statistics"] = stats_str
+        globals["preferences"] = prf
 
         if prf is not None:
             if prf.sensuality is not None:
