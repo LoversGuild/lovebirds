@@ -121,10 +121,7 @@ def _find_person_by_email_interactive(
             old_email = EmailAddress(old_email)
             id = email_id_map[old_email]
 
-            logging.info(f"Updating email address of `{name}' to `{raw.email}'")
-            person = people[id]
-            person.email = raw.email
-            return person
+            return people[id]
         case _:
             raise RuntimeError("Impossible!")
 
@@ -150,6 +147,7 @@ def _register_participation(config: Config, raw: RawRegistration) -> None:
     raw_hash = raw.compute_hash()
 
     person = _find_person_by_email_interactive(config.people, raw)
+    is_new_person = person is None
     if person is None:
         logging.info(
             f"Adding new person `{raw.first_name} {raw.last_name} <{raw.email}>'"
@@ -185,6 +183,12 @@ def _register_participation(config: Config, raw: RawRegistration) -> None:
     logging.info(
         f"Importing registration for `{person.first_name or raw.first_name} {person.last_name or raw.last_name} <{raw.email}>'..."
     )
+
+    if raw.email != person.email or is_new_person:
+        person.email = edit.input_email(
+            prompt="Email address changed! Confirm new email: ",
+            init=raw.email,
+        )
 
     is_valid_name = lambda val: len(val) > 0 and val.strip() == val
 
