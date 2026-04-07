@@ -18,7 +18,7 @@ import yaml
 import mashumaro.codecs.basic as basic_codec
 import mashumaro.codecs.yaml as yaml_codec
 
-from lovebirds.models.email import is_valid_email_address
+from lovebirds.models.email import EmailAddress, is_valid_email_address
 from lovebirds.utils import FilePath
 
 __all__ = [
@@ -131,9 +131,11 @@ def input_choice(
 
 def input_email(
     prompt: str, default: str | None = None, init: str | None = None
-) -> str:
-    return input_validated(
-        prompt, predicate=is_valid_email_address, default=default, init=init
+) -> EmailAddress:
+    return EmailAddress(
+        input_validated(
+            prompt, predicate=is_valid_email_address, default=default, init=init
+        )
     )
 
 
