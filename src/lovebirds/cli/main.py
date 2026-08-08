@@ -10,6 +10,7 @@ import sys
 
 from lovebirds.cli import git
 from lovebirds.cli.config import Config
+from lovebirds.cli.edit_cmd import edit_people
 from lovebirds.cli.list import list_people
 from lovebirds.cli.phase import add_phase
 from lovebirds.cli.reformat import reformat_people
@@ -223,6 +224,12 @@ def parse_arguments() -> Config:
         description="This command is useful for reformatting the database after manual editing.",
     )
     reformat.set_defaults(function=reformat_people, subcommand="reformat")
+
+    edit = root_sub.add_parser(
+        "edit",
+        help="Open participation database in $EDITOR for manual editing.",
+    )
+    edit.set_defaults(function=edit_people, subcommand="edit")
 
     register = root_sub.add_parser(
         "register", help="Import signups from the retistration form"
