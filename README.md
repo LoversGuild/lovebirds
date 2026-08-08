@@ -58,8 +58,8 @@ A database whose name ends in `.gpg` is encrypted at rest. `lovebird` decrypts
 it on load and re-encrypts it on save; no separate command is needed, and the
 database file itself is never written out in the clear.
 
-Importing registrations is the exception: `register` hands your editor a
-temporary plaintext file, which it deletes afterwards but which a crash would
+Interactive editing is the exception: `edit` and `register` hand your editor a
+temporary plaintext file, which they delete afterwards but which a crash would
 leave behind.
 
 Two paths beside the database file configure this:

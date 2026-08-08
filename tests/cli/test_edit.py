@@ -1,5 +1,8 @@
+import os
 import pathlib
+import stat
 import subprocess
+import tempfile
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -37,7 +40,23 @@ class TestEditFile:
         monkeypatch.setenv("EDITOR", "myeditor")
         monkeypatch.delenv("VISUAL", raising=False)
         edit.edit_file("/tmp/some.yaml")
-        mock_run.assert_called_once_with(["myeditor", "/tmp/some.yaml"])
+        mock_run.assert_called_once_with(["myeditor", "/tmp/some.yaml"], check=True)
+
+    def test_editor_failure_is_not_swallowed(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+    ) -> None:
+        """An editor exiting non-zero means the edit was abandoned. Ignoring it
+        would let the caller act on whatever happened to be in the file.
+
+        Runs a real failing command rather than a mock: a mock raises whatever
+        it is told to, so it would pass with or without check=True.
+        """
+        monkeypatch.setenv("EDITOR", "false")
+        monkeypatch.delenv("VISUAL", raising=False)
+        target = tmp_path / "some.yaml"
+        target.write_text("unchanged")
+        with pytest.raises(subprocess.CalledProcessError):
+            edit.edit_file(target)
 
 
 class TestInputValidated:
@@ -140,6 +159,38 @@ class TestInputYesNo:
 
 
 class TestEditAsYaml:
+    @patch("lovebirds.cli.edit.edit_file")
+    def test_the_file_is_private_before_any_plaintext_reaches_it(
+        self, mock_edit: MagicMock
+    ) -> None:
+        """This file holds decrypted personal data — for `edit`, the entire
+        database — in the shared system temp directory, so no one else may
+        read it at any point.
+
+        The mode is sampled twice: as the file is created, before a byte has
+        been written, and again once the editor has it. The first is the one
+        that matters, and it holds because mkstemp sets the mode in the same
+        syscall that creates the file, leaving no window to widen.
+        """
+        modes: list[int] = []
+        real_temp_file = tempfile.NamedTemporaryFile
+
+        def recording_temp_file(*args: Any, **kwargs: Any) -> Any:
+            handle = real_temp_file(*args, **kwargs)
+            modes.append(stat.S_IMODE(os.stat(handle.name).st_mode))
+            return handle
+
+        mock_edit.side_effect = lambda name: modes.append(
+            stat.S_IMODE(os.stat(name).st_mode)
+        )
+
+        with patch(
+            "lovebirds.cli.edit.tempfile.NamedTemporaryFile", recording_temp_file
+        ):
+            edit.edit_as_yaml(AgeRange, AgeRange, AgeRange(min=25, max=55), "prefix")
+
+        assert modes == [0o600, 0o600]
+
     @patch("lovebirds.cli.edit.edit_file")
     def test_round_trips_an_unchanged_record(self, mock_edit: MagicMock) -> None:
         """Leaving the file untouched must yield an equal record: the dump has
