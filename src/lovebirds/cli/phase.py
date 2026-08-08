@@ -7,7 +7,6 @@ from datetime import datetime
 import logging
 
 from lovebirds.cli.config import Config
-from lovebirds.models.email import EmailAddress
 from lovebirds.models.events import EventId
 from lovebirds.models.people import *
 from lovebirds.templates.eval import eval_string

@@ -15,7 +15,7 @@ import smtplib
 import subprocess
 from typing import Any, cast
 
-from lovebirds.models.email import EmailAddress, is_valid_email_address
+from lovebirds.models.email import is_valid_email_address
 from lovebirds.models.events import MessageInfo, SmtpConfig
 from lovebirds.models.people import Person, Participation, SentMessageInfo
 from lovebirds.utils import utc_now

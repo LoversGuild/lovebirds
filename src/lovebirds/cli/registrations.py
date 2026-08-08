@@ -224,8 +224,10 @@ def _register_participation(config: Config, raw: RawRegistration) -> None:
         )
     person.birth_year = new_birth_year
 
-    is_valid_phone = lambda val: len(val) == 0 or (val[0:1] == "+" and val[1:].isdigit())
-    new_phone: str | None = raw.phone_number.strip()
+    is_valid_phone = lambda val: len(val) == 0 or (
+        val[0:1] == "+" and val[1:].isdigit()
+    )
+    new_phone = raw.phone_number.strip()
     if new_phone[0:1] == "0":
         new_phone = "+358" + new_phone[1:]
     if person.phone != new_phone:
@@ -234,9 +236,7 @@ def _register_participation(config: Config, raw: RawRegistration) -> None:
             predicate=is_valid_phone,
             init=new_phone,
         )
-    if len(new_phone) == 0:
-        new_phone = None
-    person.phone = new_phone
+    person.phone = new_phone if new_phone else None
 
     # Move or add preferred language to the beginning of the preference list.
     # Use an intermediate dict to preserve ordering.
