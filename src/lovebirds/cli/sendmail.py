@@ -69,10 +69,6 @@ def send_messages(config: Config) -> None:
         event_file_dir = os.path.abspath(os.path.dirname(config.args.event_file))
         env = make_environment(event_file_dir)
 
-        # Backup participant database before sending the first message. No
-        # backups in dry-run mode.
-        backup = not config.args.dry_run
-
         # Loop over all people, render message and send it
         for recipient in config.people.values():
             # Prechecks: should we send this message at all
@@ -125,8 +121,7 @@ def send_messages(config: Config) -> None:
                 # has to survive an abort, but a mailing should leave one
                 # commit rather than one per recipient. The commit happens
                 # below, in the finally.
-                config.write_people(backup=backup)
-                backup = False
+                config.write_people()
             else:
                 logging.info(
                     f"Would send `{config.args.msg_name}' to `{recipient.named_email}'"

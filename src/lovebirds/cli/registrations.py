@@ -396,7 +396,6 @@ def _group_raw_registrations(
 
 def import_registrations(config: Config) -> None:
     registrations = [_load_raw_registration(filename) for filename in config.args.files]
-    is_first = True
     try:
         for event_id, person_id_to_reg_list_map in _group_raw_registrations(
             registrations
@@ -408,8 +407,7 @@ def import_registrations(config: Config) -> None:
                     # Written, not committed: an import is a long interactive
                     # session, and answers already given must survive an abort
                     # partway through. The commit happens once, below.
-                    config.write_people(backup=is_first)
-                    is_first = False
+                    config.write_people()
     finally:
         # In the finally, so that an import abandoned halfway — Ctrl-C at a
         # prompt — still commits the registrations already dealt with,

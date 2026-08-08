@@ -12,14 +12,11 @@ __all__ = [
     "save_people",
 ]
 
-from datetime import datetime
+import contextlib
 import logging
 import os
-import shutil
 import subprocess
-import sys
 import tempfile
-from typing import Any
 
 from mashumaro.codecs.yaml import YAMLDecoder
 from mashumaro.codecs import BasicEncoder
@@ -28,27 +25,6 @@ import yaml
 import lovebirds.models.events as e
 import lovebirds.models.people as p
 from lovebirds.utils import FilePath
-
-
-def backup_file(filename: str | os.PathLike[str]) -> None:
-    """Make backup copy of the named file.
-    Timestamp of current local file is appended to the original filename.
-    Returns None
-    """
-
-    if not os.path.isfile(filename):
-        raise FileNotFoundError(f"backup_file: File `{filename}' does not exist")
-
-    timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
-    dest_name = f"{filename}.{timestamp}"
-    if os.path.exists(dest_name):
-        raise FileExistsError(
-            f"backup_file: Backup destination file `{filename}' already exists"
-        )
-
-    logging.info(f"Making backup copy of `{filename}' as `{dest_name}'")
-
-    shutil.copy(filename, dest_name, follow_symlinks=False)
 
 
 def load_event(filename: FilePath) -> e.Event:
@@ -191,17 +167,29 @@ _people_encoder: BasicEncoder[p.People] = BasicEncoder(p.People)
 
 
 def _safe_write_file(filename: FilePath, data: bytes) -> None:
-    """Safely write a file by first writing the data to a temporary file
-    and then renaming that to the destination file.
+    """Write data to a temporary file beside the destination and rename it
+    into place.
+
+    This is the database's only protection against a failed write: the
+    destination holds either its old contents or the new ones, never a
+    half-written mixture. Durability beyond that point comes from the git
+    commit.
+
+    The temporary file inherits NamedTemporaryFile's 0600 mode, which then
+    becomes the mode of the database. That suits a file holding personal
+    data, and it is deliberate rather than incidental.
     """
 
     temp_file = tempfile.NamedTemporaryFile(
         delete=False, dir=os.path.dirname(filename), mode="wb"
     )
     try:
-        temp_file.write(data)
-        temp_file.close()
+        with temp_file:
+            temp_file.write(data)
         os.replace(temp_file.name, filename)
-    except:
-        os.remove(temp_file.name)
+    except BaseException:
+        # Cleaning up must not replace the failure being reported: that
+        # exception is what the caller prints before offering a retry.
+        with contextlib.suppress(OSError):
+            os.remove(temp_file.name)
         raise
