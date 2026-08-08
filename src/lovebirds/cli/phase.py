@@ -124,4 +124,4 @@ def add_phase(config: Config) -> None:
                 f"Evaluating condition for `{p.named_email}' returned `{repr(result)}', should be `bool'"
             )
 
-    config.save_people()
+    config.save_people(commit_detail=config.args.new_status)

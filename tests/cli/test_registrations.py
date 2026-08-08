@@ -308,15 +308,20 @@ class TestRegistrationSortKey:
 class TestImportRegistrations:
     @patch("lovebirds.cli.registrations._register_participation")
     @patch("lovebirds.cli.registrations._load_raw_registration")
-    def test_saves_after_every_registration(
+    def test_writes_after_every_registration_but_commits_once(
         self,
         mock_load: MagicMock,
         mock_register: MagicMock,
         make_config: Callable[..., Config],
     ) -> None:
-        """Each registration is saved as it is processed, so an abort partway
-        through keeps the ones already dealt with. Only the first save takes a
-        backup: the rest of the run would just copy its own output."""
+        """Each registration is written as it is processed, so an abort
+        partway through an interactive import keeps the answers already
+        given. Committing per registration would leave an import of a batch
+        of signups as N commits and N serial pushes.
+
+        Only the first write takes a backup: the rest of the run would just
+        copy its own output.
+        """
         mock_load.side_effect = [
             make_raw(email=EmailAddress("a@example.com")),
             make_raw(email=EmailAddress("b@example.com")),
@@ -324,9 +329,36 @@ class TestImportRegistrations:
         config = make_config(files=["a.gpg", "b.gpg"], operator_id=OPERATOR_ID)
         import_registrations(config)
         assert mock_register.call_count == 2
-        config.save_people.assert_has_calls(  # type: ignore[attr-defined]
+        config.write_people.assert_has_calls(  # type: ignore[attr-defined]
             [call(backup=True), call(backup=False)]
         )
+        config.commit_people.assert_called_once()  # type: ignore[attr-defined]
+
+    @patch("lovebirds.cli.registrations._register_participation")
+    @patch("lovebirds.cli.registrations._load_raw_registration")
+    def test_an_abandoned_import_still_commits_what_it_processed(
+        self,
+        mock_load: MagicMock,
+        mock_register: MagicMock,
+        make_config: Callable[..., Config],
+    ) -> None:
+        """Ctrl-C at a prompt is a normal way to end an import. The
+        registrations already dealt with are on disk; leaving them
+        uncommitted would strand them outside the history and leave a dirty
+        work tree for the next run's `git pull`.
+        """
+        mock_load.side_effect = [
+            make_raw(email=EmailAddress("a@example.com")),
+            make_raw(email=EmailAddress("b@example.com")),
+        ]
+        mock_register.side_effect = [None, KeyboardInterrupt()]
+        config = make_config(files=["a.gpg", "b.gpg"], operator_id=OPERATOR_ID)
+
+        with pytest.raises(KeyboardInterrupt):
+            import_registrations(config)
+
+        assert config.write_people.call_count == 1  # type: ignore[attr-defined]
+        config.commit_people.assert_called_once()  # type: ignore[attr-defined]
 
     @patch("lovebirds.cli.registrations._register_participation")
     @patch("lovebirds.cli.registrations._load_raw_registration")

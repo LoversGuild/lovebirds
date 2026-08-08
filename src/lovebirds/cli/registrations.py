@@ -397,12 +397,21 @@ def _group_raw_registrations(
 def import_registrations(config: Config) -> None:
     registrations = [_load_raw_registration(filename) for filename in config.args.files]
     is_first = True
-    for event_id, person_id_to_reg_list_map in _group_raw_registrations(
-        registrations
-    ).items():
-        logging.info(f"Processing registrations for {event_id}...")
-        for raw_reg_list in person_id_to_reg_list_map.values():
-            for raw in raw_reg_list:
-                _register_participation(config, raw)
-                config.save_people(backup=is_first)
-                is_first = False
+    try:
+        for event_id, person_id_to_reg_list_map in _group_raw_registrations(
+            registrations
+        ).items():
+            logging.info(f"Processing registrations for {event_id}...")
+            for raw_reg_list in person_id_to_reg_list_map.values():
+                for raw in raw_reg_list:
+                    _register_participation(config, raw)
+                    # Written, not committed: an import is a long interactive
+                    # session, and answers already given must survive an abort
+                    # partway through. The commit happens once, below.
+                    config.write_people(backup=is_first)
+                    is_first = False
+    finally:
+        # In the finally, so that an import abandoned halfway — Ctrl-C at a
+        # prompt — still commits the registrations already dealt with,
+        # instead of leaving them written but outside the history.
+        config.commit_people()
