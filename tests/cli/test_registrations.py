@@ -12,6 +12,8 @@ from lovebirds.cli.registrations import (
     RawRegistration,
     _find_person_by_email_interactive,
     _group_raw_registrations,
+    _load_raw_registration,
+    _raw_registration_encoder,
     _register_participation,
     _registration_sort_key,
     import_registrations,
@@ -35,6 +37,11 @@ OPERATOR_ID = UUID("00000000-0000-0000-0000-000000000000")
 RAW_EMAIL = EmailAddress("alice.smith@example.com")
 RAW_PHONE = "+358401234567"
 RAW_BIRTH_YEAR = 1990
+
+
+def _raw_registration_json(raw: RawRegistration) -> bytes:
+    """The bytes gpg would hand back for this registration."""
+    return _raw_registration_encoder.encode(raw).encode("utf-8")
 
 
 def make_raw(**kwargs: Any) -> RawRegistration:
@@ -508,3 +515,15 @@ class TestRegisterParticipationHandling:
         phases = person.participation["event1"].phases
         assert [p.status for p in phases] == [ParticipationStatus.registered]
         assert len(person.participation["event1"].registrations) == 2
+
+
+class TestLoadRawRegistration:
+    @patch("lovebirds.cli.registrations.gpg_decrypt")
+    def test_decodes_the_decrypted_bytes(self, mock_decrypt: MagicMock) -> None:
+        """Registration files arrive GPG-encrypted; decryption is shared with
+        the database reader rather than reimplemented here."""
+        raw = make_raw()
+        mock_decrypt.return_value = _raw_registration_json(raw)
+        loaded = _load_raw_registration("regs/01.json.gpg")
+        mock_decrypt.assert_called_once_with("regs/01.json.gpg")
+        assert loaded == raw

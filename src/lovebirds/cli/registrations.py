@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from datetime import datetime
 import hashlib
 import logging
-import subprocess
 import sys
 import uuid
 import yaml
@@ -18,6 +17,7 @@ from mashumaro.codecs.json import JSONDecoder, JSONEncoder
 from mashumaro.codecs.basic import BasicEncoder
 
 from lovebirds.cli.config import Config
+from lovebirds.io import gpg_decrypt
 import lovebirds.cli.edit as edit
 from lovebirds.models.email import EmailAddress
 from lovebirds.models.events import EventId
@@ -74,18 +74,8 @@ _registration_encoder = BasicEncoder(Registration)
 ### Loading raw registration data ###
 
 
-def _decrypt_file(filename: FilePath) -> bytes:
-    result = subprocess.run(
-        ["gpg", "--decrypt", filename],
-        stdout=subprocess.PIPE,
-        check=True,
-        text=False,
-    )
-    return result.stdout
-
-
 def _load_raw_registration(filename: FilePath) -> RawRegistration:
-    return _raw_registration_decoder.decode(_decrypt_file(filename))
+    return _raw_registration_decoder.decode(gpg_decrypt(filename))
 
 
 def _find_person_by_email_interactive(
