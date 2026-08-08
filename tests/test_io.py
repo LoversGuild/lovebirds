@@ -1,6 +1,8 @@
-import os
 import pathlib
+import stat
 import subprocess
+import tempfile
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -12,11 +14,9 @@ from lovebirds.io import (
     _is_gpg_file,
     _read_gpg_ids,
     _safe_write_file,
-    backup_file,
     load_people,
     save_people,
 )
-from lovebirds.models.email import EmailAddress
 from lovebirds.models.people import People
 
 
@@ -40,20 +40,6 @@ class TestSaveLoadRoundTrip:
         loaded = load_people(filepath)
         named_emails = [p.named_email for p in loaded.values()]
         assert named_emails == sorted(named_emails, key=str.lower)
-
-
-class TestBackupFile:
-    def test_creates_timestamped_copy(self, tmp_path: pathlib.Path) -> None:
-        original = tmp_path / "data.yaml"
-        original.write_text("original content")
-        backup_file(original)
-        backups = [f for f in tmp_path.iterdir() if f.name.startswith("data.yaml.")]
-        assert len(backups) == 1
-        assert backups[0].read_text() == "original content"
-
-    def test_nonexistent_file_raises(self, tmp_path: pathlib.Path) -> None:
-        with pytest.raises(FileNotFoundError, match="does not exist"):
-            backup_file(tmp_path / "nonexistent.yaml")
 
 
 class TestSafeWriteFile:
@@ -88,6 +74,65 @@ class TestSafeWriteFile:
             with pytest.raises(OSError):
                 _safe_write_file(filepath, b"replacement")
         assert filepath.read_bytes() == b"original"
+
+    @pytest.mark.parametrize(
+        "failure",
+        [OSError("disk full"), KeyboardInterrupt()],
+        ids=["disk full", "interrupted"],
+    )
+    def test_a_failed_write_leaves_the_destination_untouched(
+        self, tmp_path: pathlib.Path, failure: BaseException
+    ) -> None:
+        """The other failure tests stop at the rename. Failing mid-write has
+        to be just as harmless: the database keeps what it had, and no
+        half-written temp file is left beside it.
+
+        Ctrl-C counts. It does not derive from Exception, so catching only
+        Exception here would leave a stray temp file in the operator's work
+        tree — where git would then offer to commit it.
+        """
+        filepath = tmp_path / "output.txt"
+        filepath.write_bytes(b"original")
+        real_temp_file = tempfile.NamedTemporaryFile
+
+        def failing_temp_file(*args: Any, **kwargs: Any) -> Any:
+            handle = real_temp_file(*args, **kwargs)
+            handle.write = MagicMock(side_effect=failure)  # type: ignore[method-assign]
+            return handle
+
+        with patch("lovebirds.io.tempfile.NamedTemporaryFile", failing_temp_file):
+            with pytest.raises(type(failure)):
+                _safe_write_file(filepath, b"replacement")
+
+        assert filepath.read_bytes() == b"original"
+        assert list(tmp_path.iterdir()) == [filepath]
+
+    def test_a_failed_cleanup_does_not_hide_the_write_error(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """The write failure is what the caller prints before offering a
+        retry, so a second failure while tidying up must not take its place.
+        """
+        filepath = tmp_path / "output.txt"
+        with (
+            patch("lovebirds.io.os.replace", side_effect=OSError("the real cause")),
+            patch("lovebirds.io.os.remove", side_effect=OSError("cleanup failed")),
+        ):
+            with pytest.raises(OSError, match="the real cause"):
+                _safe_write_file(filepath, b"data")
+
+    def test_the_written_file_is_private_to_its_owner(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """The database holds personal data, and the rename gives it the mode
+        of the temporary file it came from. Pin that: a save must not leave
+        the database more widely readable than 0600.
+        """
+        filepath = tmp_path / "output.txt"
+        filepath.write_bytes(b"old content")
+        filepath.chmod(0o664)
+        _safe_write_file(filepath, b"new content")
+        assert stat.S_IMODE(filepath.stat().st_mode) == 0o600
 
 
 class TestLoadPeopleErrors:

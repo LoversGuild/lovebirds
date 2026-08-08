@@ -13,7 +13,7 @@ from typeguard import TypeCheckError, check_type
 
 from lovebirds.cli import git
 from lovebirds.models.events import Event, EventId
-from lovebirds.io import backup_file, save_people
+from lovebirds.io import save_people
 from lovebirds.models.people import People, PersonId
 from lovebirds.statistics import EventParticipantsStatistics
 
@@ -27,17 +27,17 @@ class Config:
     event_participants_stats: EventParticipantsStatistics | None = None
     operator_id: PersonId | None
 
-    def save_people(self, backup: bool = True, commit_detail: str = "") -> None:
+    def save_people(self, commit_detail: str = "") -> None:
         """Write the database out and record it in git.
 
         commit_detail adds a subcommand's own words to the commit message —
         which status a phase set, say.
         """
 
-        self.write_people(backup=backup)
+        self.write_people()
         self.commit_people(commit_detail)
 
-    def write_people(self, backup: bool = True) -> None:
+    def write_people(self) -> None:
         """Write the database out without recording it in git.
 
         For subcommands that save repeatedly: `send` writes after each
@@ -56,9 +56,6 @@ class Config:
 
         if self.args.dry_run:
             return
-
-        if backup:
-            backup_file(self.args.people_file)
 
         # Saving is critical: loop until we succeed.
         while True:

@@ -4,64 +4,40 @@ from unittest.mock import patch, MagicMock
 from typeguard import TypeCheckError
 
 from lovebirds.cli.config import Config
-from lovebirds.models.people import People
 
 
 class TestConfigSavePeople:
     @patch("lovebirds.cli.config.save_people")
-    @patch("lovebirds.cli.config.backup_file")
     @patch("lovebirds.cli.config.check_type")
     def test_dry_run_skips_save(
         self,
         mock_check: MagicMock,
-        mock_backup: MagicMock,
         mock_save: MagicMock,
         make_config: Callable[..., Config],
     ) -> None:
         config = make_config(dry_run=True, mock_save=False)
         config.save_people()
         mock_save.assert_not_called()
-        mock_backup.assert_not_called()
 
     @patch("lovebirds.cli.config.save_people")
-    @patch("lovebirds.cli.config.backup_file")
     @patch("lovebirds.cli.config.check_type")
-    def test_backup_true_calls_backup(
+    def test_saves_when_not_dry_run(
         self,
         mock_check: MagicMock,
-        mock_backup: MagicMock,
         mock_save: MagicMock,
         make_config: Callable[..., Config],
     ) -> None:
         config = make_config(mock_save=False)
-        config.save_people(backup=True)
-        mock_backup.assert_called_once_with("/tmp/test_people.yaml")
+        config.save_people()
         mock_save.assert_called_once()
 
     @patch("lovebirds.cli.config.save_people")
-    @patch("lovebirds.cli.config.backup_file")
-    @patch("lovebirds.cli.config.check_type")
-    def test_backup_false_skips_backup(
-        self,
-        mock_check: MagicMock,
-        mock_backup: MagicMock,
-        mock_save: MagicMock,
-        make_config: Callable[..., Config],
-    ) -> None:
-        config = make_config(mock_save=False)
-        config.save_people(backup=False)
-        mock_backup.assert_not_called()
-        mock_save.assert_called_once()
-
-    @patch("lovebirds.cli.config.save_people")
-    @patch("lovebirds.cli.config.backup_file")
     @patch("lovebirds.cli.config.check_type")
     @patch("builtins.input")
     def test_save_failure_retries_until_it_succeeds(
         self,
         mock_input: MagicMock,
         mock_check: MagicMock,
-        mock_backup: MagicMock,
         mock_save: MagicMock,
         make_config: Callable[..., Config],
     ) -> None:
@@ -74,14 +50,12 @@ class TestConfigSavePeople:
         mock_input.assert_called_once()
 
     @patch("lovebirds.cli.config.save_people")
-    @patch("lovebirds.cli.config.backup_file")
     @patch("lovebirds.cli.config.check_type")
     @patch("builtins.input")
     def test_type_check_failure_warns_but_still_saves(
         self,
         mock_input: MagicMock,
         mock_check: MagicMock,
-        mock_backup: MagicMock,
         mock_save: MagicMock,
         make_config: Callable[..., Config],
     ) -> None:
@@ -92,14 +66,12 @@ class TestConfigSavePeople:
         mock_save.assert_called_once()
 
     @patch("lovebirds.cli.config.save_people")
-    @patch("lovebirds.cli.config.backup_file")
     @patch("lovebirds.cli.config.check_type")
     @patch("builtins.input")
     def test_type_check_failure_in_dry_run_does_not_prompt(
         self,
         mock_input: MagicMock,
         mock_check: MagicMock,
-        mock_backup: MagicMock,
         mock_save: MagicMock,
         make_config: Callable[..., Config],
     ) -> None:
@@ -112,31 +84,28 @@ class TestConfigSavePeople:
 
 @patch("lovebirds.cli.config.git.commit_and_push")
 @patch("lovebirds.cli.config.save_people")
-@patch("lovebirds.cli.config.backup_file")
 @patch("lovebirds.cli.config.check_type")
 class TestConfigGitPush:
     def test_no_git_flag_skips_git(
         self,
         mock_check: MagicMock,
-        mock_backup: MagicMock,
         mock_save: MagicMock,
         mock_commit: MagicMock,
         make_config: Callable[..., Config],
     ) -> None:
         config = make_config(no_git=True, subcommand="reformat", mock_save=False)
-        config.save_people(backup=False)
+        config.save_people()
         mock_commit.assert_not_called()
 
     def test_the_saved_database_is_committed(
         self,
         mock_check: MagicMock,
-        mock_backup: MagicMock,
         mock_save: MagicMock,
         mock_commit: MagicMock,
         make_config: Callable[..., Config],
     ) -> None:
         config = make_config(no_git=False, subcommand="reformat", mock_save=False)
-        config.save_people(backup=False)
+        config.save_people()
         mock_commit.assert_called_once_with(
             "/tmp/test_people.yaml", "lovebird: reformat (event: event1)"
         )
@@ -144,7 +113,6 @@ class TestConfigGitPush:
     def test_the_commit_comes_after_the_write(
         self,
         mock_check: MagicMock,
-        mock_backup: MagicMock,
         mock_save: MagicMock,
         mock_commit: MagicMock,
         make_config: Callable[..., Config],
@@ -157,14 +125,13 @@ class TestConfigGitPush:
         mock_commit.side_effect = lambda *a: steps.append("commit")
 
         config = make_config(no_git=False, subcommand="reformat", mock_save=False)
-        config.save_people(backup=False)
+        config.save_people()
 
         assert steps == ["write", "commit"]
 
     def test_dry_run_skips_git(
         self,
         mock_check: MagicMock,
-        mock_backup: MagicMock,
         mock_save: MagicMock,
         mock_commit: MagicMock,
         make_config: Callable[..., Config],
@@ -172,7 +139,7 @@ class TestConfigGitPush:
         config = make_config(
             dry_run=True, no_git=False, subcommand="reformat", mock_save=False
         )
-        config.save_people(backup=False)
+        config.save_people()
         mock_commit.assert_not_called()
 
 

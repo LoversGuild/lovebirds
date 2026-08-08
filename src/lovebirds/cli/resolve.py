@@ -63,4 +63,4 @@ def resolve_refs(config: Config) -> None:
 
     if config.args.dry_run:
         logging.info("Skipping real action in dry-run mode.")
-    config.save_people(backup=True)
+    config.save_people()

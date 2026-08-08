@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 from uuid import UUID, uuid4
 
 import pytest
@@ -318,9 +318,6 @@ class TestImportRegistrations:
         partway through an interactive import keeps the answers already
         given. Committing per registration would leave an import of a batch
         of signups as N commits and N serial pushes.
-
-        Only the first write takes a backup: the rest of the run would just
-        copy its own output.
         """
         mock_load.side_effect = [
             make_raw(email=EmailAddress("a@example.com")),
@@ -329,9 +326,7 @@ class TestImportRegistrations:
         config = make_config(files=["a.gpg", "b.gpg"], operator_id=OPERATOR_ID)
         import_registrations(config)
         assert mock_register.call_count == 2
-        config.write_people.assert_has_calls(  # type: ignore[attr-defined]
-            [call(backup=True), call(backup=False)]
-        )
+        assert config.write_people.call_count == 2  # type: ignore[attr-defined]
         config.commit_people.assert_called_once()  # type: ignore[attr-defined]
 
     @patch("lovebirds.cli.registrations._register_participation")

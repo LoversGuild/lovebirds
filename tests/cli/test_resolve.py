@@ -117,7 +117,7 @@ class TestResolveRefs:
         avec = bob.participation["event1"].registrations[0].avecs[0]
         assert isinstance(avec, PersonRefByName)
 
-    def test_save_called_with_backup(self, make_config: Callable[..., Config]) -> None:
+    def test_save_called(self, make_config: Callable[..., Config]) -> None:
         config = make_config()
         resolve_refs(config)
-        config.save_people.assert_called_once_with(backup=True)  # type: ignore[attr-defined]
+        config.save_people.assert_called_once()  # type: ignore[attr-defined]
