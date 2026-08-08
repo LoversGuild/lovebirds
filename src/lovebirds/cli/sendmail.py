@@ -121,7 +121,11 @@ def send_messages(config: Config) -> None:
                     message_id=msg_id,
                     time=send_time,
                 )
-                config.save_people(backup=backup)
+                # Written, not committed: the record of who has been mailed
+                # has to survive an abort, but a mailing should leave one
+                # commit rather than one per recipient. The commit happens
+                # below, in the finally.
+                config.write_people(backup=backup)
                 backup = False
             else:
                 logging.info(
@@ -141,6 +145,12 @@ def send_messages(config: Config) -> None:
             mbox.close()
         if test_mbox is not None:
             test_mbox.close()
+
+        # In the finally, so that a mailing cut short — an SMTP failure, or
+        # Ctrl-C — still commits the messages it did send. Leaving them
+        # written but uncommitted would strand them outside the history and
+        # make the next run's `git pull` refuse to touch a dirty work tree.
+        config.commit_people(config.args.msg_name)
 
         if not config.args.dry_run:
             logging.info(f"{sent_count} messages sent, {sent_total} sent in total")

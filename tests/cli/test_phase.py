@@ -120,14 +120,19 @@ class TestAddPhase:
         add_phase(config)
         assert "event1" not in person.participation
 
-    def test_save_people_called(
+    def test_save_people_called_with_the_status_as_commit_detail(
         self, make_person: Callable[..., Person], make_config: Callable[..., Config]
     ) -> None:
+        """The status goes into the commit message, so a glance at the git log
+        says what each run did rather than just that a phase was added.
+        """
         person = make_person()
         people: People = {uuid4(): person}
         config = self._config(make_config, people)
         add_phase(config)
-        config.save_people.assert_called_once()  # type: ignore[attr-defined]
+        config.save_people.assert_called_once_with(  # type: ignore[attr-defined]
+            commit_detail="accepted"
+        )
 
     def test_role_is_inherited_from_the_previous_phase(
         self,

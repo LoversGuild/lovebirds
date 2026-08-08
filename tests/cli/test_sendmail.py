@@ -197,7 +197,47 @@ class TestSendMessagesRecipientSelection:
         assert record.message_id == "<abc@example.com>"
         assert record.operator == operator
         assert record.time is not None
-        assert config.save_people.call_count == 1  # type: ignore[attr-defined]
+        assert config.write_people.call_count == 1  # type: ignore[attr-defined]
+
+    def test_a_mailing_leaves_one_commit_however_many_recipients(
+        self,
+        make_person: Callable[..., Person],
+        make_config: Callable[..., Config],
+    ) -> None:
+        """Committing per recipient would turn one mailing into N commits and
+        N serial pushes, and a failing push would prompt for a retry between
+        every message with the SMTP connection still open.
+        """
+        people: People = {uuid4(): self._person(make_person) for _ in range(3)}
+        config = send_config(make_config, people)
+
+        send_messages(config)
+
+        assert config.write_people.call_count == 3  # type: ignore[attr-defined]
+        config.commit_people.assert_called_once_with(  # type: ignore[attr-defined]
+            "invitation"
+        )
+
+    def test_an_interrupted_mailing_still_commits_what_it_sent(
+        self,
+        make_person: Callable[..., Person],
+        make_config: Callable[..., Config],
+    ) -> None:
+        """Otherwise the messages that did go out stay written but
+        uncommitted, and the next run's `git pull` refuses to touch a dirty
+        work tree.
+        """
+        people: People = {uuid4(): self._person(make_person) for _ in range(2)}
+        config = send_config(make_config, people)
+        self.smtp.send_message.side_effect = [None, OSError("connection reset")]
+
+        with pytest.raises(OSError, match="connection reset"):
+            send_messages(config)
+
+        assert config.write_people.call_count == 1  # type: ignore[attr-defined]
+        config.commit_people.assert_called_once_with(  # type: ignore[attr-defined]
+            "invitation"
+        )
 
     def test_dry_run_neither_sends_nor_records(
         self,

@@ -8,6 +8,7 @@ import logging
 import os
 import sys
 
+from lovebirds.cli import git
 from lovebirds.cli.config import Config
 from lovebirds.cli.list import list_people
 from lovebirds.cli.phase import add_phase
@@ -108,6 +109,13 @@ def parse_arguments() -> Config:
         action="store_true",
         help="Only show what would be done, don't execute actions.",
     )
+    root.add_argument(
+        "--no-git",
+        dest="no_git",
+        default=False,
+        action="store_true",
+        help="Don't automatically pull before loading or commit and push after saving the database file.",
+    )
 
     # Subcommands of root
     root_sub = root.add_subparsers(title="Subcommands")
@@ -156,7 +164,7 @@ def parse_arguments() -> Config:
         default=None,
         help="An expression evaluated to get the sorting key",
     )
-    list_cmd.set_defaults(function=list_people)
+    list_cmd.set_defaults(function=list_people, subcommand="list")
 
     phase = root_sub.add_parser("phase", help="Manage participation phases")
     add_event_id_option(phase)
@@ -207,14 +215,14 @@ def parse_arguments() -> Config:
         default=None,
         help="An jinja2 expression that returns a bool when evaluated. If True, a new participation phase is added for the person.",
     )
-    phase_add.set_defaults(function=add_phase)
+    phase_add.set_defaults(function=add_phase, subcommand="phase add")
 
     reformat = root_sub.add_parser(
         "reformat",
         help="Parse and rewrite participation database file.",
         description="This command is useful for reformatting the database after manual editing.",
     )
-    reformat.set_defaults(function=reformat_people)
+    reformat.set_defaults(function=reformat_people, subcommand="reformat")
 
     register = root_sub.add_parser(
         "register", help="Import signups from the retistration form"
@@ -227,12 +235,12 @@ def parse_arguments() -> Config:
         help="Names of encrypted registration files created by Lentopusu",
     )
     add_operator_option(register)
-    register.set_defaults(function=import_registrations)
+    register.set_defaults(function=import_registrations, subcommand="register")
 
     resolve = root_sub.add_parser(
         "resolve-refs", help="Replace named person references with person identifiers"
     )
-    resolve.set_defaults(function=resolve_refs)
+    resolve.set_defaults(function=resolve_refs, subcommand="resolve-refs")
 
     send = root_sub.add_parser(
         "send", help="Send a mass e-mail message to participants"
@@ -290,7 +298,7 @@ def parse_arguments() -> Config:
         help="Set mailbox type for --fcc and --test-fcc",
     )
 
-    send.set_defaults(function=send_messages)
+    send.set_defaults(function=send_messages, subcommand="send")
 
     args = root.parse_args()
 
@@ -298,6 +306,10 @@ def parse_arguments() -> Config:
     log_format = f"{program_name}: %(levelname)s: %(message)s"
     logging.basicConfig(level=args.log_level.upper(), format=log_format)
     logging.debug(f"Setting log level to {args.log_level}")
+
+    if not args.no_git:
+        git.check_work_tree(args.people_file)
+        git.pull(args.people_file)
 
     # Load people
     people = load_people(args.people_file)
