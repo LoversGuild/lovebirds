@@ -37,8 +37,17 @@ def edit_as_yaml[S, T](
     source_type: Type[S], target_type: Type[T], data: S, prefix: str
 ) -> T:
     try:
+        # This file holds decrypted personal data — for `edit`, the whole
+        # database — so it must never be readable by anyone else. mkstemp,
+        # which NamedTemporaryFile is built on, opens it 0600 in the same
+        # syscall that creates it, so there is no window in which the data is
+        # present at wider permissions. TestEditAsYaml pins the mode.
+        #
+        # The .yaml suffix is what tells the editor to treat this as YAML:
+        # without it there is no highlighting, and no indent rules either, so
+        # an editor's default settings can insert the tab that YAML forbids.
         temp_file = tempfile.NamedTemporaryFile(
-            delete=False, mode="w", encoding="UTF-8"
+            delete=False, mode="w", encoding="UTF-8", suffix=".yaml"
         )
         dict_data = basic_codec.encode(data, source_type)
         commented_prefix = (
@@ -72,7 +81,7 @@ def edit_as_yaml[S, T](
 
 def edit_file(filename: FilePath) -> None:
     editor = get_user_editor()
-    subprocess.run([editor, filename])
+    subprocess.run([editor, filename], check=True)
 
 
 def format_exception(exc: BaseException) -> str:

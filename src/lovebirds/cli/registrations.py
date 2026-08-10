@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from datetime import datetime
 import hashlib
 import logging
-import subprocess
 import sys
 import uuid
 import yaml
@@ -18,6 +17,7 @@ from mashumaro.codecs.json import JSONDecoder, JSONEncoder
 from mashumaro.codecs.basic import BasicEncoder
 
 from lovebirds.cli.config import Config
+from lovebirds.io import gpg_decrypt
 import lovebirds.cli.edit as edit
 from lovebirds.models.email import EmailAddress
 from lovebirds.models.events import EventId
@@ -74,18 +74,8 @@ _registration_encoder = BasicEncoder(Registration)
 ### Loading raw registration data ###
 
 
-def _decrypt_file(filename: FilePath) -> bytes:
-    result = subprocess.run(
-        ["gpg", "--decrypt", filename],
-        stdout=subprocess.PIPE,
-        check=True,
-        text=False,
-    )
-    return result.stdout
-
-
 def _load_raw_registration(filename: FilePath) -> RawRegistration:
-    return _raw_registration_decoder.decode(_decrypt_file(filename))
+    return _raw_registration_decoder.decode(gpg_decrypt(filename))
 
 
 def _find_person_by_email_interactive(
@@ -224,8 +214,10 @@ def _register_participation(config: Config, raw: RawRegistration) -> None:
         )
     person.birth_year = new_birth_year
 
-    is_valid_phone = lambda val: len(val) == 0 or (val[0:1] == "+" and val[1:].isdigit())
-    new_phone: str | None = raw.phone_number.strip()
+    is_valid_phone = lambda val: len(val) == 0 or (
+        val[0:1] == "+" and val[1:].isdigit()
+    )
+    new_phone = raw.phone_number.strip()
     if new_phone[0:1] == "0":
         new_phone = "+358" + new_phone[1:]
     if person.phone != new_phone:
@@ -234,9 +226,7 @@ def _register_participation(config: Config, raw: RawRegistration) -> None:
             predicate=is_valid_phone,
             init=new_phone,
         )
-    if len(new_phone) == 0:
-        new_phone = None
-    person.phone = new_phone
+    person.phone = new_phone if new_phone else None
 
     # Move or add preferred language to the beginning of the preference list.
     # Use an intermediate dict to preserve ordering.
@@ -406,13 +396,20 @@ def _group_raw_registrations(
 
 def import_registrations(config: Config) -> None:
     registrations = [_load_raw_registration(filename) for filename in config.args.files]
-    is_first = True
-    for event_id, person_id_to_reg_list_map in _group_raw_registrations(
-        registrations
-    ).items():
-        logging.info(f"Processing registrations for {event_id}...")
-        for raw_reg_list in person_id_to_reg_list_map.values():
-            for raw in raw_reg_list:
-                _register_participation(config, raw)
-                config.save_people(backup=is_first)
-                is_first = False
+    try:
+        for event_id, person_id_to_reg_list_map in _group_raw_registrations(
+            registrations
+        ).items():
+            logging.info(f"Processing registrations for {event_id}...")
+            for raw_reg_list in person_id_to_reg_list_map.values():
+                for raw in raw_reg_list:
+                    _register_participation(config, raw)
+                    # Written, not committed: an import is a long interactive
+                    # session, and answers already given must survive an abort
+                    # partway through. The commit happens once, below.
+                    config.write_people()
+    finally:
+        # In the finally, so that an import abandoned halfway — Ctrl-C at a
+        # prompt — still commits the registrations already dealt with,
+        # instead of leaving them written but outside the history.
+        config.commit_people()

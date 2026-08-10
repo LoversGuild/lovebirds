@@ -41,6 +41,41 @@ The `--log-level=` option enables adjustment of the log level, making `lovebird`
 
 The `--dry-run` option is applicable for all commands, allowing for a test run without making actual changes or sending messages.
 
+### Keeping the Database in Git
+
+The database is expected to live in a git repository, and git is what backs it
+up: `lovebird` pulls before reading it and commits and pushes after saving it,
+so every change is recorded with the subcommand that made it. Pushing is
+skipped when the branch has no remote to push to.
+
+A database outside a work tree is an error. Pass `--no-git` to work on one
+anyway; that disables the check, the pull and the commit alike, and leaves you
+responsible for the backups.
+
+### Encrypting the Database
+
+A database whose name ends in `.gpg` is encrypted at rest. `lovebird` decrypts
+it on load and re-encrypts it on save; no separate command is needed, and the
+database file itself is never written out in the clear.
+
+Interactive editing is the exception: `edit` and `register` hand your editor a
+temporary plaintext file, which they delete afterwards but which a crash would
+leave behind.
+
+Two paths beside the database file configure this:
+
+- **`.gpg-id`** lists the recipients the database is encrypted to, one key ID
+  or email address per line. Blank lines and lines starting with `#` are
+  ignored. The file is required: without it, saving an encrypted database
+  fails rather than silently producing something nobody can read.
+- **`.gpg-pubkeys/`** is optional, and holds exported public keys. Everything
+  in it is imported before encrypting, so a new co-organizer's key can travel
+  with the repository instead of having to be exchanged separately. Files that
+  are not keys are reported and skipped.
+
+Give the new recipient's key to everyone by dropping it in `.gpg-pubkeys/` and
+adding them to `.gpg-id`; the next save encrypts to them as well.
+
 ### Examples of Invoking `lovebird`
 
 #### Inviting People to a New Event

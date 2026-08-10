@@ -15,7 +15,7 @@ import smtplib
 import subprocess
 from typing import Any, cast
 
-from lovebirds.models.email import EmailAddress, is_valid_email_address
+from lovebirds.models.email import is_valid_email_address
 from lovebirds.models.events import MessageInfo, SmtpConfig
 from lovebirds.models.people import Person, Participation, SentMessageInfo
 from lovebirds.utils import utc_now
@@ -69,10 +69,6 @@ def send_messages(config: Config) -> None:
         event_file_dir = os.path.abspath(os.path.dirname(config.args.event_file))
         env = make_environment(event_file_dir)
 
-        # Backup participant database before sending the first message. No
-        # backups in dry-run mode.
-        backup = not config.args.dry_run
-
         # Loop over all people, render message and send it
         for recipient in config.people.values():
             # Prechecks: should we send this message at all
@@ -121,8 +117,11 @@ def send_messages(config: Config) -> None:
                     message_id=msg_id,
                     time=send_time,
                 )
-                config.save_people(backup=backup)
-                backup = False
+                # Written, not committed: the record of who has been mailed
+                # has to survive an abort, but a mailing should leave one
+                # commit rather than one per recipient. The commit happens
+                # below, in the finally.
+                config.write_people()
             else:
                 logging.info(
                     f"Would send `{config.args.msg_name}' to `{recipient.named_email}'"
@@ -141,6 +140,12 @@ def send_messages(config: Config) -> None:
             mbox.close()
         if test_mbox is not None:
             test_mbox.close()
+
+        # In the finally, so that a mailing cut short — an SMTP failure, or
+        # Ctrl-C — still commits the messages it did send. Leaving them
+        # written but uncommitted would strand them outside the history and
+        # make the next run's `git pull` refuse to touch a dirty work tree.
+        config.commit_people(config.args.msg_name)
 
         if not config.args.dry_run:
             logging.info(f"{sent_count} messages sent, {sent_total} sent in total")

@@ -7,7 +7,6 @@ from datetime import datetime
 import logging
 
 from lovebirds.cli.config import Config
-from lovebirds.models.email import EmailAddress
 from lovebirds.models.events import EventId
 from lovebirds.models.people import *
 from lovebirds.templates.eval import eval_string
@@ -125,4 +124,4 @@ def add_phase(config: Config) -> None:
                 f"Evaluating condition for `{p.named_email}' returned `{repr(result)}', should be `bool'"
             )
 
-    config.save_people()
+    config.save_people(commit_detail=config.args.new_status)

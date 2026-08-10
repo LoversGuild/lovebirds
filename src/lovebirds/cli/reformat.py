@@ -7,4 +7,4 @@ from lovebirds.cli.config import Config
 
 
 def reformat_people(config: Config) -> None:
-    config.save_people(backup=False)
+    config.save_people()
