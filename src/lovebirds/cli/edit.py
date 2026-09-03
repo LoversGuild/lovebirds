@@ -41,11 +41,7 @@ def edit_as_yaml[S, T](
         # database — so it must never be readable by anyone else. mkstemp,
         # which NamedTemporaryFile is built on, opens it 0600 in the same
         # syscall that creates it, so there is no window in which the data is
-        # present at wider permissions. TestEditAsYaml pins the mode.
-        #
-        # The .yaml suffix is what tells the editor to treat this as YAML:
-        # without it there is no highlighting, and no indent rules either, so
-        # an editor's default settings can insert the tab that YAML forbids.
+        # present at wider permissions.
         temp_file = tempfile.NamedTemporaryFile(
             delete=False, mode="w", encoding="UTF-8", suffix=".yaml"
         )

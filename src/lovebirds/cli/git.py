@@ -5,14 +5,17 @@
 
 The database is expected to live in a git work tree, and git is what makes a
 save durable: an edit that has been written but not committed is an edit that
-can be lost. Pulling and pushing therefore prompt for a retry instead of
-giving up, and every operation names its repository explicitly with `git -C`.
+can be lost. Every operation names its repository explicitly with `git -C`.
+
+None of these operations retry on failure. Unlike a failed write of the
+database itself, a failed pull, commit or push leaves the data safe on disk,
+and the operator can rerun the git command by hand once the cause — no
+network, a conflict, an unset user.email — has been dealt with.
 """
 
 import logging
 import os
 import subprocess
-import traceback
 
 __all__ = [
     "check_work_tree",
@@ -68,7 +71,7 @@ def pull(people_file: str) -> None:
     if not _has_upstream(repo_dir):
         logging.info("No remote tracking branch. Skipping pull.")
         return
-    _run_until_success(["git", "-C", repo_dir, "pull"], "Git pull failed.")
+    subprocess.run(["git", "-C", repo_dir, "pull"], check=True)
 
 
 def commit_and_push(people_file: str, message: str) -> None:
@@ -98,7 +101,7 @@ def commit_and_push(people_file: str, message: str) -> None:
     if not _has_upstream(repo_dir):
         logging.info("No remote tracking branch. Skipping push.")
         return
-    _run_until_success(["git", "-C", repo_dir, "push"], "Git push failed.")
+    subprocess.run(["git", "-C", repo_dir, "push"], check=True)
 
 
 ### Internal ###
@@ -147,20 +150,3 @@ def _is_staged(repo_dir: str, path: str) -> bool:
         ["git", "-C", repo_dir, "diff", "--cached", "--quiet", "--", path]
     )
     return result.returncode != 0
-
-
-def _run_until_success(cmd: list[str], failure_message: str) -> None:
-    """Run cmd, prompting for a retry until it succeeds.
-
-    Networked git operations fail for reasons that go away on their own — no
-    connectivity, a race with another operator — so abandoning the run would
-    lose work that a second attempt would have saved.
-    """
-
-    while True:
-        try:
-            subprocess.run(cmd, check=True)
-            return
-        except subprocess.CalledProcessError:
-            traceback.print_exc()
-            input(f"{failure_message} Press enter to retry.")

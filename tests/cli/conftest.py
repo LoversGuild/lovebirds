@@ -22,26 +22,21 @@ def fake_git() -> Callable[..., GitRun]:
 
         returncodes -- exit with this code rather than 0
         fail        -- fail every time
-        fail_once   -- fail on the first call only
 
     A failure raises CalledProcessError only when the caller passed
     check=True, exactly as subprocess.run does. Honouring that matters: a
-    stand-in that always raised would report a retry loop as working whether
-    or not the code under test asked for the exit status to be fatal.
+    stand-in that always raised would report a failure as fatal whether or
+    not the code under test asked for the exit status to be.
     """
 
     def _make(
         returncodes: dict[str, int] | None = None,
         fail: frozenset[str] = frozenset(),
-        fail_once: frozenset[str] = frozenset(),
     ) -> GitRun:
-        failed: set[str] = set()
-
         def run(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
             cmd = args[0]
             for word in cmd:
-                if word in fail or (word in fail_once and word not in failed):
-                    failed.add(word)
+                if word in fail:
                     if kwargs.get("check"):
                         raise subprocess.CalledProcessError(1, cmd)
                     return subprocess.CompletedProcess(args=cmd, returncode=1)

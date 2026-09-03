@@ -89,21 +89,19 @@ class TestPull:
         git.pull(DB)
         assert ["git", "-C", "/tmp/repo", "pull"] not in commands(mock_run)
 
-    @patch("builtins.input")
     @patch("lovebirds.cli.git.subprocess.run")
-    def test_a_failed_pull_is_retried(
-        self,
-        mock_run: MagicMock,
-        mock_input: MagicMock,
-        fake_git: Callable[..., GitRun],
+    def test_a_failed_pull_is_fatal(
+        self, mock_run: MagicMock, fake_git: Callable[..., GitRun]
     ) -> None:
         """Being offline, or hitting a conflict, must not silently skip the
-        pull: the run would then edit a database that is out of date.
+        pull: the run would then edit a database that is out of date. Nor is
+        it retried: nothing has been written yet, so nothing is at stake, and
+        the operator can pull by hand once the cause is dealt with.
         """
-        mock_run.side_effect = fake_git(fail_once=frozenset({"pull"}))
-        git.pull(DB)
-        assert commands(mock_run).count(["git", "-C", "/tmp/repo", "pull"]) == 2
-        mock_input.assert_called_once()
+        mock_run.side_effect = fake_git(fail=frozenset({"pull"}))
+        with pytest.raises(subprocess.CalledProcessError):
+            git.pull(DB)
+        assert commands(mock_run).count(["git", "-C", "/tmp/repo", "pull"]) == 1
 
 
 class TestCommitAndPush:
@@ -189,20 +187,16 @@ class TestCommitAndPush:
         git.commit_and_push(DB, "lovebird: reformat")
         assert ["git", "-C", "/tmp/repo", "push"] not in commands(mock_run)
 
-    @patch("builtins.input")
     @patch("lovebirds.cli.git.subprocess.run")
-    def test_a_failed_push_is_retried(
-        self,
-        mock_run: MagicMock,
-        mock_input: MagicMock,
-        fake_git: Callable[..., GitRun],
+    def test_a_failed_push_is_fatal(
+        self, mock_run: MagicMock, fake_git: Callable[..., GitRun]
     ) -> None:
-        """A push can fail for transient reasons (no network, a race with
-        another operator), so it retries rather than losing the commit.
+        """A push that fails — no network, a race with another operator — is
+        reported, not retried. The commit it was meant to publish is already
+        in the local history, so nothing is lost, and `git push` from the
+        command line finishes the job once the cause is dealt with.
         """
-        mock_run.side_effect = fake_git(
-            returncodes=STAGED, fail_once=frozenset({"push"})
-        )
-        git.commit_and_push(DB, "lovebird: reformat")
-        assert commands(mock_run).count(["git", "-C", "/tmp/repo", "push"]) == 2
-        mock_input.assert_called_once()
+        mock_run.side_effect = fake_git(returncodes=STAGED, fail=frozenset({"push"}))
+        with pytest.raises(subprocess.CalledProcessError):
+            git.commit_and_push(DB, "lovebird: reformat")
+        assert commands(mock_run).count(["git", "-C", "/tmp/repo", "push"]) == 1

@@ -205,8 +205,8 @@ class TestSendMessagesRecipientSelection:
         make_config: Callable[..., Config],
     ) -> None:
         """Committing per recipient would turn one mailing into N commits and
-        N serial pushes, and a failing push would prompt for a retry between
-        every message with the SMTP connection still open.
+        N serial pushes, and the first push to fail would abort the mailing
+        part-way through, with the SMTP connection still open.
         """
         people: People = {uuid4(): self._person(make_person) for _ in range(3)}
         config = send_config(make_config, people)

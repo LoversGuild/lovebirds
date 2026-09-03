@@ -10,7 +10,6 @@ import pytest
 from lovebirds.io import (
     gpg_decrypt,
     _gpg_encrypt,
-    _import_gpg_pubkeys,
     _is_gpg_file,
     _read_gpg_ids,
     _safe_write_file,
@@ -267,13 +266,22 @@ class TestGpgEncrypt:
         "recipient_ids", [["ABCD1234"], ["ABCD1234", "EFGH5678"]], ids=["one", "two"]
     )
     def test_encrypts_to_every_recipient(self, recipient_ids: list[str]) -> None:
+        """The command line carries no trust override. gpg's default trust
+        model makes encrypting to an untrusted key fail, and that is wanted:
+        whether a recipient's key is genuine is for the operator to decide in
+        their own keyring, not for a file in the repository to assert.
+
+        Key lookup is switched off for the same reason: a recipient the
+        keyring does not hold must fail, not be fetched from WKD or a
+        keyserver behind the operator's back.
+        """
         with patch("lovebirds.io.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
                 args=[], returncode=0, stdout=b"encrypted data"
             )
             result = _gpg_encrypt(b"plain yaml", recipient_ids)
 
-        expected_cmd = ["gpg", "--batch", "--encrypt", "--trust-model", "always"]
+        expected_cmd = ["gpg", "--batch", "--encrypt", "--auto-key-locate", "clear"]
         for recipient_id in recipient_ids:
             expected_cmd += ["--recipient", recipient_id]
         mock_run.assert_called_once_with(
@@ -289,84 +297,6 @@ class TestGpgEncrypt:
             mock_run.side_effect = subprocess.CalledProcessError(2, "gpg")
             with pytest.raises(subprocess.CalledProcessError):
                 _gpg_encrypt(b"plain yaml", ["ABCD1234"])
-
-
-class TestImportGpgPubkeys:
-    def test_imports_keys(self, tmp_path: pathlib.Path) -> None:
-        pubkeys_dir = tmp_path / ".gpg-pubkeys"
-        pubkeys_dir.mkdir()
-        (pubkeys_dir / "alice.asc").write_text("key-data-alice")
-        (pubkeys_dir / "bob.asc").write_text("key-data-bob")
-        db_path = tmp_path / "people.yaml.gpg"
-
-        with patch("lovebirds.io.subprocess.run") as mock_run:
-            mock_run.return_value = subprocess.CompletedProcess(args=[], returncode=0)
-            _import_gpg_pubkeys(db_path)
-
-        assert [c.args[0] for c in mock_run.call_args_list] == [
-            ["gpg", "--batch", "--import", str(pubkeys_dir / "alice.asc")],
-            ["gpg", "--batch", "--import", str(pubkeys_dir / "bob.asc")],
-        ]
-
-    def test_no_pubkeys_dir_is_noop(self, tmp_path: pathlib.Path) -> None:
-        db_path = tmp_path / "people.yaml.gpg"
-        with patch("lovebirds.io.subprocess.run") as mock_run:
-            _import_gpg_pubkeys(db_path)
-        mock_run.assert_not_called()
-
-    def test_skips_subdirectories(self, tmp_path: pathlib.Path) -> None:
-        pubkeys_dir = tmp_path / ".gpg-pubkeys"
-        pubkeys_dir.mkdir()
-        (pubkeys_dir / "subdir").mkdir()
-        (pubkeys_dir / "alice.asc").write_text("key-data")
-        db_path = tmp_path / "people.yaml.gpg"
-
-        with patch("lovebirds.io.subprocess.run") as mock_run:
-            mock_run.return_value = subprocess.CompletedProcess(args=[], returncode=0)
-            _import_gpg_pubkeys(db_path)
-
-        assert [c.args[0] for c in mock_run.call_args_list] == [
-            ["gpg", "--batch", "--import", str(pubkeys_dir / "alice.asc")],
-        ]
-
-    def test_a_file_that_is_not_a_key_does_not_stop_the_save(
-        self, tmp_path: pathlib.Path
-    ) -> None:
-        """gpg rejects anything that is not a key, and this directory sits in
-        the operator's git repository — a README or a .DS_Store is bound to
-        turn up there eventually. Neither may cost them their save.
-
-        The keys are imported in name order, so the rejected file here sorts
-        first: giving up at the first refusal would skip a real co-organizer's
-        key and fail later, at encryption, with a much worse message.
-        """
-        pubkeys_dir = tmp_path / ".gpg-pubkeys"
-        pubkeys_dir.mkdir()
-        (pubkeys_dir / "README").write_text("Put co-organizers' keys here.")
-        (pubkeys_dir / "alice.asc").write_text("key-data")
-        db_path = tmp_path / "people.yaml.gpg"
-
-        def refuse_the_readme(
-            cmd: list[str], check: bool = False, **kwargs: object
-        ) -> subprocess.CompletedProcess[bytes]:
-            # `check` has to be honoured here: a mock ignores it, so a stub
-            # that did too would pass whether or not the code asks gpg's exit
-            # status to be fatal — which is the whole point of the test.
-            if not cmd[-1].endswith("README"):
-                return subprocess.CompletedProcess(args=cmd, returncode=0)
-            if check:
-                raise subprocess.CalledProcessError(2, cmd)
-            return subprocess.CompletedProcess(args=cmd, returncode=2)
-
-        with patch(
-            "lovebirds.io.subprocess.run", side_effect=refuse_the_readme
-        ) as mock_run:
-            _import_gpg_pubkeys(db_path)
-
-        assert [c.args[0] for c in mock_run.call_args_list] == [
-            ["gpg", "--batch", "--import", str(pubkeys_dir / "README")],
-            ["gpg", "--batch", "--import", str(pubkeys_dir / "alice.asc")],
-        ]
 
 
 class TestLoadPeopleGpg:
@@ -419,32 +349,6 @@ class TestSavePeopleGpg:
         assert recipient_ids == ["ABCD1234", "EFGH5678"]
         # The file should contain the encrypted output
         assert gpg_path.read_bytes() == b"encrypted output"
-
-    def test_save_gpg_file_imports_pubkeys_before_encrypting(
-        self, tmp_path: pathlib.Path, sample_people: People
-    ) -> None:
-        """A recipient added to .gpg-id along with their key in .gpg-pubkeys/
-        is unknown to the keyring until the key is imported, so the import has
-        to happen before gpg is asked to encrypt to them.
-        """
-        (tmp_path / ".gpg-id").write_text("ABCD1234\n")
-        gpg_path = tmp_path / "people.yaml.gpg"
-
-        steps = MagicMock()
-        with (
-            patch("lovebirds.io._import_gpg_pubkeys") as mock_import,
-            patch("lovebirds.io._gpg_encrypt") as mock_encrypt,
-        ):
-            mock_encrypt.return_value = b"encrypted output"
-            steps.attach_mock(mock_import, "import_pubkeys")
-            steps.attach_mock(mock_encrypt, "encrypt")
-            save_people(gpg_path, sample_people)
-
-        mock_import.assert_called_once_with(gpg_path)
-        assert [name for name, _, _ in steps.mock_calls] == [
-            "import_pubkeys",
-            "encrypt",
-        ]
 
     def test_save_plain_file_unchanged(
         self, tmp_path: pathlib.Path, sample_people: People

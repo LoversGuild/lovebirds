@@ -62,19 +62,15 @@ Interactive editing is the exception: `edit` and `register` hand your editor a
 temporary plaintext file, which they delete afterwards but which a crash would
 leave behind.
 
-Two paths beside the database file configure this:
+A file named **`.gpg-id`** beside the database lists the recipients it is
+encrypted to, one key ID or email address per line. Blank lines and lines
+starting with `#` are ignored. The file is required: without it, saving an
+encrypted database fails rather than silently producing something nobody can
+read.
 
-- **`.gpg-id`** lists the recipients the database is encrypted to, one key ID
-  or email address per line. Blank lines and lines starting with `#` are
-  ignored. The file is required: without it, saving an encrypted database
-  fails rather than silently producing something nobody can read.
-- **`.gpg-pubkeys/`** is optional, and holds exported public keys. Everything
-  in it is imported before encrypting, so a new co-organizer's key can travel
-  with the repository instead of having to be exchanged separately. Files that
-  are not keys are reported and skipped.
-
-Give the new recipient's key to everyone by dropping it in `.gpg-pubkeys/` and
-adding them to `.gpg-id`; the next save encrypts to them as well.
+Every recipient's public key must be in the keyring of whoever runs `lovebird`,
+and trusted there: `lovebird` uses GPG's default trust model and refuses to
+encrypt to a key the operator has not vouched for.
 
 ### Examples of Invoking `lovebird`
 

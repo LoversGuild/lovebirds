@@ -13,7 +13,6 @@ __all__ = [
 ]
 
 import contextlib
-import logging
 import os
 import subprocess
 import tempfile
@@ -77,10 +76,9 @@ def gpg_decrypt(filename: FilePath) -> bytes:
 ### Internal ###
 
 # The database is encrypted when its name ends in _GPG_SUFFIX. Its recipients
-# and their public keys are configured by two siblings of the database file.
+# are listed in a sibling of the database file.
 _GPG_SUFFIX = ".gpg"
 _GPG_ID_FILENAME = ".gpg-id"
-_GPG_PUBKEYS_DIRNAME = ".gpg-pubkeys"
 
 
 def _encrypt_if_gpg(filename: FilePath, data: bytes) -> bytes:
@@ -90,9 +88,6 @@ def _encrypt_if_gpg(filename: FilePath, data: bytes) -> bytes:
 
     if not _is_gpg_file(filename):
         return data
-    # Recipients may be unknown to this keyring — a co-organizer who has just
-    # been added, say — so make their keys importable before encrypting.
-    _import_gpg_pubkeys(filename)
     return _gpg_encrypt(data, _read_gpg_ids(filename))
 
 
@@ -108,11 +103,6 @@ def _sibling_path(database_path: FilePath, name: str) -> str:
 
 def _read_gpg_ids(database_path: FilePath) -> list[str]:
     gpg_id_path = _sibling_path(database_path, _GPG_ID_FILENAME)
-    if not os.path.isfile(gpg_id_path):
-        raise FileNotFoundError(
-            f"No {gpg_id_path} file found. "
-            f"Required for encrypting {os.fsdecode(database_path)}."
-        )
     with open(gpg_id_path, "r", encoding="utf-8") as f:
         ids = [
             stripped
@@ -124,31 +114,18 @@ def _read_gpg_ids(database_path: FilePath) -> list[str]:
     return ids
 
 
-def _import_gpg_pubkeys(database_path: FilePath) -> None:
-    pubkeys_dir = _sibling_path(database_path, _GPG_PUBKEYS_DIRNAME)
-    if not os.path.isdir(pubkeys_dir):
-        return
-    for entry in sorted(os.listdir(pubkeys_dir)):
-        key_file = os.path.join(pubkeys_dir, entry)
-        if os.path.isfile(key_file):
-            logging.info(f"Importing GPG public key from {key_file}")
-            result = subprocess.run(["gpg", "--batch", "--import", key_file])
-            if result.returncode != 0:
-                # Not everything that lands in this directory has to be a key
-                # — a README, or a .DS_Store from an operator's machine — and
-                # refusing to save the database over one would be absurd. A
-                # recipient whose key is genuinely missing still fails, at
-                # encryption time, where the diagnosis is clearer.
-                logging.warning(f"Could not import {key_file}. Ignoring it.")
-
-
 def _gpg_encrypt(data: bytes, recipient_ids: list[str]) -> bytes:
-    # --trust-model always: the recipients are the ones the operator listed in
-    # .gpg-id, which is the authority here. Under the default trust model gpg
-    # refuses to encrypt to a key the local keyring has not signed, which would
-    # make --batch operation fail on a keyring that has just imported a key
-    # from .gpg-pubkeys/.
-    cmd = ["gpg", "--batch", "--encrypt", "--trust-model", "always"]
+    # Under gpg's default trust model, encrypting to a key the operator's own
+    # keyring does not hold and trust is refused, and with --batch that refusal
+    # is final. That is the intended behaviour: .gpg-id names the recipients,
+    # but whether each of their keys is genuine is for the operator to decide,
+    # by importing and signing it themselves, not for this tool to assume.
+    #
+    # --auto-key-locate clear: for the same reason, a recipient missing from
+    # the keyring is an error, not a cue to go and fetch a key from WKD or a
+    # keyserver — which gpg would otherwise do for any recipient given as an
+    # email address.
+    cmd = ["gpg", "--batch", "--encrypt", "--auto-key-locate", "clear"]
     for rid in recipient_ids:
         cmd.extend(["--recipient", rid])
     result = subprocess.run(
